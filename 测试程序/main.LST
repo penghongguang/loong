@@ -1,0 +1,341 @@
+C51 COMPILER V9.01   MAIN                                                                  11/15/2020 18:53:33 PAGE 1   
+
+
+C51 COMPILER V9.01, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN main.OBJ
+COMPILER INVOKED BY: D:\Keil\C51\BIN\C51.EXE main.c BROWSE DEBUG OBJECTEXTEND
+
+line level    source
+
+   1          //****************************************************************//
+   2          //         DHT21使用范例 
+   3          //单片机 AT89S52 或 STC89C52RC 
+   4          //功能   串口发送温湿度数据 晶振 11.0592M 波特率 9600 
+   5          //硬件   P2.0口为通讯口连接DHT22,DHT22的电源和地连接单片机的电源和地，单片机串口加MAX232连接电脑 
+   6          //****************************************************************//
+   7          
+   8          #include <reg51.h>
+   9          #include <intrins.h> 
+  10          #include<stdio.h>
+  11          //
+  12          typedef unsigned char  U8;       /* defined for unsigned 8-bits integer variable          无符号8位整型变量  */
+  13          typedef signed   char  S8;       /* defined for signed 8-bits integer variable            有符号8位整型变量  */
+  14          typedef unsigned int   U16;      /* defined for unsigned 16-bits integer variable         无符号16位整型变量 */
+  15          typedef signed   int   S16;      /* defined for signed 16-bits integer variable           有符号16位整型变量 */
+  16          typedef unsigned long  U32;      /* defined for unsigned 32-bits integer variable         无符号32位整型变量 */
+  17          typedef signed   long  S32;      /* defined for signed 32-bits integer variable           有符号32位整型变量 */
+  18          typedef float          F32;      /* single precision floating point variable (32bits) 单精度浮点数（32位长
+             -度） */
+  19          typedef double         F64;      /* double precision floating point variable (64bits) 双精度浮点数（64位长
+             -度） */
+  20          //
+  21          #define uchar unsigned char
+  22          #define uint unsigned int
+  23          #define   Data_0_time    4
+  24          
+  25          //----------------------------------------------//
+  26          //----------------IO口定义区--------------------//
+  27          //----------------------------------------------//
+  28          sbit  P2_0  = P2^0 ;
+  29          sbit LSA=P2^2;
+  30          sbit LSB=P2^3;
+  31          sbit LSC=P2^4;
+  32          
+  33          
+  34          U8 DisplayData[8];
+  35          U8 temp1[8];
+  36          U8 code smgduan[10]={0x3f,0x06,0x5b,0x4f,0x66,0x6d,0x7d,0x07,0x7f,0x6f};
+  37          //----------------------------------------------//
+  38          //----------------定义区--------------------//
+  39          //----------------------------------------------//
+  40          U8  U8FLAG,k;
+  41          U8  U8count,U8temp;
+  42          U8  U8T_data_H,U8T_data_L,U8RH_data_H,U8RH_data_L,U8checkdata;
+  43          U8  U8T_data_H_temp,U8T_data_L_temp,U8RH_data_H_temp,U8RH_data_L_temp,U8checkdata_temp;
+  44          U8  U8comdata;
+  45          U8  outdata[5];  //定义发送的字节数        
+  46          U8  indata[5];
+  47          U8  count, count_r=0;
+  48          U8 str[5]={"RS232"};
+  49          U16 U16temp1,U16temp2;
+  50          U16 temp,hum;
+  51          SendData(U8 *a)
+  52          {
+  53   1              outdata[0] = a[0]; 
+C51 COMPILER V9.01   MAIN                                                                  11/15/2020 18:53:33 PAGE 2   
+
+  54   1              outdata[1] = a[1];
+  55   1              outdata[2] = a[2];
+  56   1              outdata[3] = a[3];
+  57   1              outdata[4] = a[4];
+  58   1              count = 1;
+  59   1              SBUF=outdata[0];
+  60   1      }
+  61          
+  62          void Delay(U16 j)
+  63          {  
+  64   1              U8 i;
+  65   1              for(;j>0;j--)
+  66   1              {       
+  67   2                      for(i=0;i<27;i++);
+  68   2              }
+  69   1      }
+  70          void  Delay_10us(void)
+  71          {
+  72   1              U8 i;
+  73   1              i--;
+  74   1              i--;
+  75   1              i--;
+  76   1              i--;
+  77   1              i--;
+  78   1              i--;
+  79   1      }
+  80                  
+  81          void  COM(void)
+  82          {
+  83   1          U8 i;
+  84   1              for(i=0;i<8;i++)           
+  85   1              {       
+  86   2                  U8FLAG=2;   
+  87   2                      while((!P2_0)&&U8FLAG++);  //等待高电平
+  88   2                      Delay_10us();
+  89   2                  Delay_10us();                               
+  90   2                  Delay_10us();
+  91   2                      U8temp=0;
+  92   2                      if(P2_0)U8temp=1;  //读取高电平
+  93   2                      U8FLAG=2;
+  94   2                      while((P2_0)&&U8FLAG++);  //等待低电平            
+  95   2                      if(U8FLAG==1)break;  //超时则跳出for循环（U8FLAG溢出，重新从0开始加）
+  96   2                      //判断数据位是0还是1     
+  97   2                         
+  98   2                      // 如果高电平高过预定0高电平值则数据位为 1       
+  99   2                      U8comdata<<=1;
+ 100   2                      U8comdata|=U8temp;        //0
+ 101   2              }
+ 102   1      }
+ 103          
+ 104          //--------------------------------
+ 105          //-----湿度读取子程序 ------------
+ 106          //--------------------------------
+ 107          //----以下变量均为全局变量--------
+ 108          //----温度高8位== U8T_data_H------
+ 109          //----温度低8位== U8T_data_L------
+ 110          //----湿度高8位== U8RH_data_H-----
+ 111          //----湿度低8位== U8RH_data_L-----
+ 112          //----校验 8位 == U8checkdata-----
+ 113          //----调用相关子程序如下----------
+ 114          //---- Delay();, Delay_10us();,COM(); 
+ 115          //--------------------------------
+C51 COMPILER V9.01   MAIN                                                                  11/15/2020 18:53:33 PAGE 3   
+
+ 116          void RH(void)
+ 117          {
+ 118   1        //主机拉低18ms 
+ 119   1         P2_0=0;
+ 120   1         Delay(180);
+ 121   1         P2_0=1;
+ 122   1       //总线由上拉电阻拉高 主机延时20us
+ 123   1         Delay_10us();
+ 124   1         Delay_10us();
+ 125   1         Delay_10us();
+ 126   1         Delay_10us();            
+ 127   1       //主机设为输入 判断从机响应信号 
+ 128   1         P2_0=1;
+ 129   1       //判断从机是否有低电平响应信号 如不响应则跳出，响应则向下运行    
+ 130   1         if(!P2_0)             //T !    
+ 131   1         {
+ 132   2         U8FLAG=2;
+ 133   2       //判断从机是否发出 80us 的低电平响应信号是否结束        
+ 134   2         while((!P2_0)&&U8FLAG++);
+ 135   2         U8FLAG=2;
+ 136   2       //判断从机是否发出 80us 的高电平，如发出则进入数据接收状态
+ 137   2         while((P2_0)&&U8FLAG++);
+ 138   2       //数据接收状态          
+ 139   2         COM();
+ 140   2         U8RH_data_H_temp=U8comdata;
+ 141   2         COM();
+ 142   2         U8RH_data_L_temp=U8comdata;
+ 143   2         COM();
+ 144   2         U8T_data_H_temp=U8comdata;
+ 145   2         COM();
+ 146   2         U8T_data_L_temp=U8comdata;
+ 147   2         COM();
+ 148   2         U8checkdata_temp=U8comdata;
+ 149   2         P2_0=1;
+ 150   2       //数据校验 
+ 151   2       
+ 152   2         U8temp=(U8T_data_H_temp+U8T_data_L_temp+U8RH_data_H_temp+U8RH_data_L_temp);
+ 153   2         if(U8temp==U8checkdata_temp)
+ 154   2         {
+ 155   3                U8RH_data_H=U8RH_data_H_temp;
+ 156   3                U8RH_data_L=U8RH_data_L_temp;
+ 157   3                U8T_data_H=U8T_data_H_temp;
+ 158   3                U8T_data_L=U8T_data_L_temp;
+ 159   3                U8checkdata=U8checkdata_temp;
+ 160   3         }//fi
+ 161   2         }//fi
+ 162   1      }
+ 163          /*******************************************************************************
+ 164          * 函 数 名         : datapros()
+ 165          * 函数功能                 : 温湿度读取处理转换函数
+ 166          * 输    入         : 无
+ 167          * 输    出         : 无
+ 168          *******************************************************************************/
+ 169          void datapros()          
+ 170          {
+ 171   1              hum=U8RH_data_H*256+U8RH_data_L;//计算湿度值
+ 172   1              temp=U8T_data_H*256+U8T_data_L;//温度           温度为负未考虑
+ 173   1              //温度
+ 174   1              DisplayData[0]=smgduan[temp%10];
+ 175   1              temp1[0]= temp%10;
+ 176   1              DisplayData[1]=smgduan[temp/10%10]|0x80;   //小数点，或0x80
+ 177   1              temp1[1]= temp/10%10;
+C51 COMPILER V9.01   MAIN                                                                  11/15/2020 18:53:33 PAGE 4   
+
+ 178   1              DisplayData[2]=smgduan[temp/100%10];
+ 179   1              temp1[2]= temp/100%10;
+ 180   1              if(U8T_data_H>127)//即温度最高位为1，表示负值
+ 181   1              {
+ 182   2                      DisplayData[3]=0x40;//显示负号
+ 183   2                      temp1[3]=0;
+ 184   2              }
+ 185   1              else
+ 186   1              {
+ 187   2                      DisplayData[3]=smgduan[(temp/1000)%10];
+ 188   2                      temp1[3]= (temp/1000)%10;
+ 189   2              }
+ 190   1              //湿度
+ 191   1              DisplayData[4]=smgduan[hum%10];
+ 192   1              temp1[4]= hum%10;
+ 193   1              DisplayData[5]=smgduan[hum/10%10]|0x80;
+ 194   1              temp1[5]= hum/10%10;
+ 195   1              DisplayData[6]=smgduan[hum/100%10];
+ 196   1              temp1[6]= hum/100%10;
+ 197   1              DisplayData[7]=smgduan[hum/1000%10];
+ 198   1              temp1[7]= hum/1000%10;
+ 199   1      }
+ 200          /*******************************************************************************
+ 201          * 函数名         :DigDisplay()
+ 202          * 函数功能               :数码管显示函数
+ 203          * 输入           : 无
+ 204          * 输出           : 无
+ 205          *******************************************************************************/
+ 206          void DigDisplay()
+ 207          {
+ 208   1              U8 i;
+ 209   1              for(i=0;i<8;i++)
+ 210   1              {
+ 211   2                      switch(i)        //位选，选择点亮的数码管，
+ 212   2                      {
+ 213   3                              case(0):
+ 214   3                                      LSA=0;LSB=0;LSC=0; break;//显示第0位
+ 215   3                              case(1):
+ 216   3                                      LSA=1;LSB=0;LSC=0; break;//显示第1位
+ 217   3                              case(2):
+ 218   3                                      LSA=0;LSB=1;LSC=0; break;//显示第2位
+ 219   3                              case(3):
+ 220   3                                      LSA=1;LSB=1;LSC=0; break;//显示第3位
+ 221   3                              case(4):
+ 222   3                                      LSA=0;LSB=0;LSC=1; break;//显示第4位
+ 223   3                              case(5):
+ 224   3                                      LSA=1;LSB=0;LSC=1; break;//显示第5位
+ 225   3                              case(6):
+ 226   3                                      LSA=0;LSB=1;LSC=1; break;//显示第6位
+ 227   3                              case(7):
+ 228   3                                      LSA=1;LSB=1;LSC=1; break;//显示第7位    
+ 229   3                      }
+ 230   2                      P0=DisplayData[i];//发送数据
+ 231   2                      Delay(10); //间隔一段时间扫描   
+ 232   2                      P0=0x00;//消隐
+ 233   2              }               
+ 234   1      }
+ 235          /*******************************************************************************
+ 236          * 函数名         :UsartInit()
+ 237          * 函数功能                 :设置串口
+ 238          * 输入           : 无
+ 239          * 输出           : 无
+C51 COMPILER V9.01   MAIN                                                                  11/15/2020 18:53:33 PAGE 5   
+
+ 240          *******************************************************************************/
+ 241          void UsartInit()
+ 242          {
+ 243   1              SCON=0X50;                      //设置为工作方式1
+ 244   1              TMOD=0X20;                      //设置计数器工作方式2
+ 245   1              PCON=0X80;                      //波特率加倍
+ 246   1              TH1=0XFA;                               //计数器初始值设置，注意波特率是4800的
+ 247   1              TL1=0XFA;
+ 248   1              ES=1;                                           //打开接收中断
+ 249   1              EA=1;                                           //打开总中断
+ 250   1              TR1=1;                                  //打开计数器
+ 251   1      }
+ 252          /*******************************************************************************
+ 253          * 函 数 名         : txd_data()
+ 254          * 函数功能                 : 发送温湿度读取处理转换函数
+ 255          * 输    入         : 无
+ 256          * 输    出         : 无
+ 257          *******************************************************************************/        
+ 258          
+ 259          /*************************发送数据的函数********************************/
+ 260          void txd_data(char send_data)    
+ 261          {
+ 262   1       SBUF = send_data; //将需要发送的数据放入发送缓冲区
+ 263   1       while(!TI);           //等待发送数据
+ 264   1       TI = 0;
+ 265   1      }
+ 266          //----------------------------------------------
+ 267          //main()功能描述:  AT89C51  11.0592MHz  串口发 
+ 268          //送温湿度数据,波特率 9600 
+ 269          //----------------------------------------------
+ 270           
+ 271          void main()
+ 272          {       
+ 273   1              char i;
+ 274   1              UsartInit();   // initialization
+ 275   1              Delay(1000);         //延时100US（12M晶振)
+ 276   1              while(1)
+ 277   1              {  
+ 278   2                 //调用温湿度读取子程序
+ 279   2                 RH();
+ 280   2                 datapros(); //数据处理
+ 281   2                 DigDisplay();//数码管显示函数  
+ 282   2                 //读取模块数据周期不宜小于 2S 
+ 283   2                 //Delay(20000);              
+ 284   2                       for(i = 7;i>= 0;i--)
+ 285   2               {
+ 286   3                txd_data(temp1[i] + 48);
+ 287   3               }
+ 288   2              }       
+ 289   1      }
+ 290          /*
+ 291          void uart() interrupt 4                      
+ 292          {
+ 293           char y,i;
+ 294           while(!RI);
+ 295           y = SBUF;                       //读取接收的信息，然后判断是否为发送温度命令
+ 296           if(y == '0')             //如果为发送命令，就将当前数据缓冲数组内的数据发送给上位机
+ 297           {
+ 298                   for(i = 0;i <= 3;i++)
+ 299                   {
+ 300                           txd_data(temp1[i] + 48);
+ 301                   }
+C51 COMPILER V9.01   MAIN                                                                  11/15/2020 18:53:33 PAGE 6   
+
+ 302           }
+ 303           RI = 0;           
+ 304          }
+ 305           */
+*** WARNING C290 IN LINE 60 OF MAIN.C: missing return value
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    745    ----
+   CONSTANT SIZE    =     10    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     56       1
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  1 WARNING(S),  0 ERROR(S)

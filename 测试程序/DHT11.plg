@@ -1,0 +1,25 @@
+<html>
+<body>
+<pre>
+<h1>µVision Build Log</h1>
+<h2>Project:</h2>
+D:\desktop\embeded\¸÷Ä£¿é\²âÊÔ³ÌÐò\²âÊÔ³ÌÐò\DHT11.uvproj
+Project File Date:  10/01/2020
+
+<h2>Output:</h2>
+Build target 'Target 1'
+compiling main.c...
+MAIN.C(60): warning C290: missing return value
+linking...
+*** WARNING L16: UNCALLED SEGMENT, IGNORED FOR OVERLAY PROCESS
+    SEGMENT: ?PR?_SENDDATA?MAIN
+Program Size: data=66.0 xdata=0 code=1064
+creating hex file from "DHT11"...
+"DHT11" - 0 Error(s), 2 Warning(s).
+Build target 'Target 1'
+linking...
+*** WARNING L16: UNCALLED SEGMENT, IGNORED FOR OVERLAY PROCESS
+    SEGMENT: ?PR?_SENDDATA?MAIN
+Program Size: data=66.0 xdata=0 code=1064
+creating hex file from "DHT11"...
+"DHT11" - 0 Error(s), 1 Warning(s).
